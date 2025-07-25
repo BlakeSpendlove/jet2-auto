@@ -11,13 +11,19 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID"))
 SCHEDULE_ROLE_ID = int(os.getenv("SCHEDULE_ROLE_ID"))
 AFFILIATE_CHANNEL_ID = int(os.getenv("AFFILIATE_CHANNEL_ID"))
+BANNER_URL = os.getenv("BANNER_URL")  # Your embed banner image URL
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 tree = bot.tree  # Use existing command tree
 
-JET2_DARK_RED = 0x8B0000  # Dark Red color hex (can be adjusted if needed)
+JET2_DARK_RED = 0x8B0000  # Dark Red color hex
+
+def add_banner(embed: discord.Embed) -> discord.Embed:
+    if BANNER_URL:
+        embed.set_image(url=BANNER_URL)
+    return embed
 
 def has_schedule_role():
     def predicate(interaction: discord.Interaction):
@@ -90,6 +96,7 @@ async def embed(interaction: discord.Interaction, json_string: str):
     try:
         embed_data = json.loads(json_string)
         embed = discord.Embed.from_dict(embed_data)
+        embed = add_banner(embed)
         await interaction.response.send_message(embed=embed)
     except Exception as e:
         await interaction.response.send_message(f"Failed to send embed: {e}", ephemeral=True)
@@ -109,8 +116,8 @@ async def affiliate_add(interaction: discord.Interaction, company: str, discord_
         timestamp=datetime.utcnow()
     )
     embed.set_footer(text="Affiliate Management")
+    embed = add_banner(embed)
 
-    # Send embed to affiliate channel
     channel = bot.get_channel(AFFILIATE_CHANNEL_ID)
     if channel:
         await channel.send(embed=embed)
@@ -128,6 +135,7 @@ async def affiliate_remove(interaction: discord.Interaction, company: str):
         timestamp=datetime.utcnow()
     )
     embed.set_footer(text="Affiliate Management")
+    embed = add_banner(embed)
 
     channel = bot.get_channel(AFFILIATE_CHANNEL_ID)
     if channel:
@@ -151,6 +159,8 @@ async def flight_host(interaction: discord.Interaction, route: str, aircraft: st
         timestamp=datetime.utcnow()
     )
     embed.set_footer(text="Flight Announcements")
+    embed = add_banner(embed)
+
     await interaction.response.send_message(embed=embed)
 
 bot.run(DISCORD_TOKEN)
