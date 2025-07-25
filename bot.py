@@ -1,32 +1,35 @@
 import os
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo  # Python 3.9+
+import asyncio
 
-# Load environment variables
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+# Load environment variables from Railway
+TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID"))
+SCHEDULE_ROLE_ID = int(os.getenv("SCHEDULE_ROLE_ID"))
 
-# Discord intents and bot setup
 intents = discord.Intents.default()
+intents.guilds = True
+intents.members = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
-tree = bot.tree  # Slash commands tree
+tree = bot.tree
 
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user} (ID: {bot.user.id})")
-    guild = discord.Object(id=GUILD_ID)
-    await tree.sync(guild=guild)
-    print("✅ Slash commands synced.")
+    try:
+        synced = await tree.sync(guild=discord.Object(id=GUILD_ID))
+        print(f"✅ Synced {len(synced)} command(s) to guild {GUILD_ID}")
+    except Exception as e:
+        print(f"❌ Failed to sync commands: {e}")
 
-# Basic /ping command
 @tree.command(name="ping", description="Simple ping command", guild=discord.Object(id=GUILD_ID))
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("🏓 Pong!")
 
-# /flight_create command
 @tree.command(name="flight_create", description="Create a flight event", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
     route="Flight route (e.g. LHR to JFK)",
@@ -43,61 +46,60 @@ async def flight_create(
     aircraft: str,
     flight_code: str
 ):
+    # Check if user has the schedule role
+    if not any(role.id == SCHEDULE_ROLE_ID for role in interaction.user.roles):
+        await interaction.response.send_message("❌ You do not have permission to use this command.", ephemeral=True)
+        return
+
     try:
-        # Convert to UTC from Europe/London time
-        local_zone = ZoneInfo("Europe/London")
-        local_dt = datetime.strptime(f"{start_date} {start_time}", "%d/%m/%Y %H:%M")
-        local_dt = local_dt.replace(tzinfo=local_zone)
-        start_dt_utc = local_dt.astimezone(ZoneInfo("UTC"))
-        end_dt_utc = start_dt_utc + timedelta(hours=1)
+        start_dt = datetime.strptime(f"{start_date} {start_time}", "%d/%m/%Y %H:%M")
+        end_dt = start_dt + timedelta(hours=1)
 
-        # Time must be in the future
-        if start_dt_utc <= datetime.now(tz=ZoneInfo("UTC")) + timedelta(minutes=1):
-            await interaction.response.send_message("❌ Start time must be at least 1 minute in the future.", ephemeral=True)
-            return
-
-        # Must be in a server
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message("❌ This command must be used in a server.", ephemeral=True)
             return
 
-        host_mention = interaction.user.mention
-
-        # Create the event
         event = await guild.create_scheduled_event(
             name=f"Flight {flight_code} - {route}",
-            start_time=start_dt_utc,
-            end_time=end_dt_utc,
-            description=(
-                f"✈️ Aircraft: {aircraft}\n"
-                f"🛫 Route: {route}\n"
-                f"📟 Flight code: {flight_code}\n"
-                f"👤 Host: {host_mention}"
-            ),
+            start_time=start_dt,
+            end_time=end_dt,
+            description=f"Aircraft: {aircraft}\nRoute: {route}\nFlight Code: {flight_code}\nHost: {interaction.user.mention}",
             privacy_level=discord.PrivacyLevel.guild_only,
             entity_type=discord.EntityType.external,
             location="Online / Virtual"
         )
 
         await interaction.response.send_message(
-            f"✅ **Flight Event Created!**\n"
-            f"📌 Name: `{event.name}`\n"
-            f"🕒 Starts: {start_dt_utc.strftime('%d/%m/%Y %H:%M')} UTC\n"
-            f"⏳ Ends: {end_dt_utc.strftime('%H:%M')} UTC\n"
-            f"👤 Host: {host_mention}"
+            f"✅ Flight event created: **{event.name}** at {start_dt.strftime('%d/%m/%Y %H:%M')}"
         )
+
+        # Schedule DM at XX:40 (15 minutes before a XX:55 flight)
+        reminder_time = start_dt.replace(minute=40, second=0)
+        now = datetime.utcnow()
+
+        delay = (reminder_time - now).total_seconds()
+        if delay > 0:
+            await schedule_dm(interaction.user, route, flight_code, start_dt, delay)
+        else:
+            print("⏰ Skipping DM – XX:40 already passed")
 
     except ValueError:
         await interaction.response.send_message(
-            "❌ Invalid date or time format. Please use **DD/MM/YYYY** for date and **HH:MM** (24-hour) for time.",
+            "❌ Invalid date or time format. Use DD/MM/YYYY for date and HH:MM for time (24h format).",
             ephemeral=True
         )
     except Exception as e:
-        await interaction.response.send_message(f"❌ Error creating event: `{e}`", ephemeral=True)
+        await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
-# Run the bot
-if __name__ == "__main__":
-    if not DISCORD_TOKEN or not GUILD_ID:
-        raise RuntimeError("❌ DISCORD_TOKEN or GUILD_ID not set in Railway variables.")
-    bot.run(DISCORD_TOKEN)
+async def schedule_dm(user, route, flight_code, start_dt, delay):
+    await asyncio.sleep(delay)
+    try:
+        await user.send(
+            f"✈️ Reminder: **Flight {flight_code} - {route}** is starting soon at **{start_dt.strftime('%H:%M')}**."
+        )
+        print(f"✅ DM sent to {user} at XX:40.")
+    except discord.Forbidden:
+        print(f"⚠️ Cannot DM {user} – DMs are disabled.")
+
+bot.run(TOKEN)
