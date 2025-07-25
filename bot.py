@@ -16,20 +16,35 @@ EVENT_CHANNEL_ID = int(os.getenv("EVENT_CHANNEL_ID"))
 AFFILIATE_CHANNEL_ID = int(os.getenv("AFFILIATE_CHANNEL_ID"))
 
 intents = discord.Intents.default()
-intents.guilds = True  # Required to sync slash commands properly
-
 bot = commands.Bot(command_prefix="!", intents=intents)
-tree = app_commands.CommandTree(bot)
+tree = bot.tree  # Use the built-in command tree
 
-FLIGHT_BANNER = "https://media.discordapp.net/attachments/1395760490982150194/1395766076490387597/jet2-and-jet2holidays-logos-1.png"
+FLIGHT_BANNER = "https://media.discordapp.net/attachments/1395760490982150194/1395766076490387597/jet2-and-jet2holidays-logos-1.png?ex=688435b4&is=6882e434&hm=38d94f0257e83e2d98c3a2e6ce3d72326a0804207e8a3f1b202131d4e5f33f63&=&format=webp&quality=lossless&width=1275&height=303"
 
+# Utility to generate unique ID
 def generate_id():
     return ''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=6))
 
+@bot.event
+async def on_ready():
+    print(f"Bot is online as {bot.user}")
+    # Sync commands to the guild for faster updates
+    guild = discord.Object(id=GUILD_ID)
+    await tree.sync(guild=guild)
+    print("Commands synced.")
+
+# HTTP session for fetching banner images
+@bot.event
+async def on_connect():
+    bot.http_session = aiohttp.ClientSession()
+
+@bot.event
+async def on_close():
+    await bot.http_session.close()
+
 async def get_banner_bytes(url):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            return await resp.read()
+    async with bot.http_session.get(url) as resp:
+        return await resp.read()
 
 @tree.command(name="flight_create", description="Create a flight event")
 @app_commands.checks.has_role(WHITELIST_ROLE_ID)
@@ -54,11 +69,12 @@ async def flight_create(interaction: discord.Interaction, route: str, date: str,
         embed.set_image(url=FLIGHT_BANNER)
         embed.set_footer(text=f"ID: {generate_id()}")
 
-        channel = bot.get_channel(FLIGHT_CHANNEL_ID)
-        if channel is None:
+        flight_channel = bot.get_channel(FLIGHT_CHANNEL_ID)
+        if flight_channel:
+            await flight_channel.send(embed=embed)
+        else:
             await interaction.response.send_message("❌ Flight channel not found.", ephemeral=True)
             return
-        await channel.send(embed=embed)
 
         event_channel = bot.get_channel(EVENT_CHANNEL_ID)
         if event_channel is None:
@@ -100,11 +116,13 @@ async def flight_host(interaction: discord.Interaction, route: str, aircraft: st
         embed.set_image(url=FLIGHT_BANNER)
         embed.set_footer(text=f"ID: {generate_id()}")
 
-        channel = bot.get_channel(FLIGHT_CHANNEL_ID)
-        if channel is None:
+        flight_channel = bot.get_channel(FLIGHT_CHANNEL_ID)
+        if flight_channel:
+            await flight_channel.send(embed=embed)
+        else:
             await interaction.response.send_message("❌ Flight channel not found.", ephemeral=True)
             return
-        await channel.send(embed=embed)
+
         await interaction.response.send_message("✅ Flight hosted announcement sent.", ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
@@ -113,37 +131,31 @@ async def flight_host(interaction: discord.Interaction, route: str, aircraft: st
 @app_commands.checks.has_role(WHITELIST_ROLE_ID)
 @app_commands.describe(company="Company name", discord_link="Discord invite link", roblox_group="Roblox group link")
 async def affiliate_add(interaction: discord.Interaction, company: str, discord_link: str, roblox_group: str):
-    try:
-        embed = discord.Embed(title=f"New Affiliate: {company}", color=0xff0000)
-        embed.add_field(name="Discord", value=discord_link, inline=False)
-        embed.add_field(name="Roblox Group", value=roblox_group, inline=False)
-        embed.set_footer(text=f"Date: {datetime.utcnow().strftime('%d/%m/%Y')} • ID: {generate_id()}")
+    embed = discord.Embed(title=f"New Affiliate: {company}", color=0xff0000)
+    embed.add_field(name="Discord", value=discord_link, inline=False)
+    embed.add_field(name="Roblox Group", value=roblox_group, inline=False)
+    embed.set_footer(text=f"Date: {datetime.utcnow().strftime('%d/%m/%Y')} • ID: {generate_id()}")
 
-        channel = bot.get_channel(AFFILIATE_CHANNEL_ID)
-        if channel is None:
-            await interaction.response.send_message("❌ Affiliate channel not found.", ephemeral=True)
-            return
+    channel = bot.get_channel(AFFILIATE_CHANNEL_ID)
+    if channel:
         await channel.send(embed=embed)
         await interaction.response.send_message("✅ Affiliate added.", ephemeral=True)
-    except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
+    else:
+        await interaction.response.send_message("❌ Affiliate channel not found.", ephemeral=True)
 
 @tree.command(name="affiliate_remove", description="Remove an affiliate")
 @app_commands.checks.has_role(WHITELIST_ROLE_ID)
 @app_commands.describe(company="Company name")
 async def affiliate_remove(interaction: discord.Interaction, company: str):
-    try:
-        embed = discord.Embed(title=f"Affiliate Removed: {company}", color=0xff0000)
-        embed.set_footer(text=f"Date: {datetime.utcnow().strftime('%d/%m/%Y')} • ID: {generate_id()}")
+    embed = discord.Embed(title=f"Affiliate Removed: {company}", color=0xff0000)
+    embed.set_footer(text=f"Date: {datetime.utcnow().strftime('%d/%m/%Y')} • ID: {generate_id()}")
 
-        channel = bot.get_channel(AFFILIATE_CHANNEL_ID)
-        if channel is None:
-            await interaction.response.send_message("❌ Affiliate channel not found.", ephemeral=True)
-            return
+    channel = bot.get_channel(AFFILIATE_CHANNEL_ID)
+    if channel:
         await channel.send(embed=embed)
         await interaction.response.send_message("✅ Affiliate removed.", ephemeral=True)
-    except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
+    else:
+        await interaction.response.send_message("❌ Affiliate channel not found.", ephemeral=True)
 
 @tree.command(name="embed", description="Send a custom embed from Discohook JSON")
 @app_commands.checks.has_role(WHITELIST_ROLE_ID)
@@ -152,24 +164,10 @@ async def embed(interaction: discord.Interaction, json_code: str):
     try:
         data = json.loads(json_code)
         webhook = discord.Webhook.from_url(data['url'], client=bot)
-        embeds = [discord.Embed.from_dict(e) for e in data.get('embeds', [])]
+        embeds = [discord.Embed.from_dict(e) for e in data['embeds']]
         await webhook.send(embeds=embeds)
         await interaction.response.send_message("✅ Embed sent.", ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ Invalid JSON or error: {e}", ephemeral=True)
-
-@bot.event
-async def on_ready():
-    print(f"GUILD_ID: {GUILD_ID}, WHITELIST_ROLE_ID: {WHITELIST_ROLE_ID}")
-    try:
-        await tree.sync(guild=discord.Object(id=GUILD_ID))
-        print("Commands synced.")
-    except Exception as e:
-        print(f"Failed to sync commands: {e}")
-    print(f"Bot is online as {bot.user}.")
-
-@tree.error
-async def on_app_command_error(interaction: discord.Interaction, error):
-    print(f"Slash command error: {error}")
 
 bot.run(TOKEN)
