@@ -1,172 +1,125 @@
+import os
 import discord
 from discord import app_commands
 from discord.ext import commands
-import os
-import random
-import string
-from datetime import datetime, timedelta, timezone
-from dotenv import load_dotenv
+from datetime import datetime, timedelta
 
-load_dotenv()
+TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = int(os.getenv("GUILD_ID"))
+WHITELIST_ROLE_ID = int(os.getenv("WHITELIST_ROLE_ID"))
+FLIGHT_CHANNEL_ID = int(os.getenv("FLIGHT_CHANNEL_ID"))
+
+if not TOKEN or not GUILD_ID or not WHITELIST_ROLE_ID or not FLIGHT_CHANNEL_ID:
+    raise ValueError("One or more required environment variables are missing.")
 
 intents = discord.Intents.default()
-intents.message_content = True
-token = os.getenv("DISCORD_TOKEN")
-guild_id = int(os.getenv("GUILD_ID"))
-allowed_channel_id = int(os.getenv("ALLOWED_CHANNEL_ID"))
+bot = commands.Bot(command_prefix="!", intents=intents)
+tree = bot.tree
 
-SCHEDULE_ROLE_ID = int(os.getenv("SCHEDULE_ROLE_ID"))
-ANNOUNCE_ROLE_ID = int(os.getenv("ANNOUNCE_ROLE_ID"))
-INFRACT_ROLE_ID = int(os.getenv("INFRACT_ROLE_ID"))
-PROMOTE_ROLE_ID = int(os.getenv("PROMOTE_ROLE_ID"))
-LOG_ROLE_ID = int(os.getenv("LOG_ROLE_ID"))
-
-BANNER_URL = "https://media.discordapp.net/attachments/1395760490982150194/1395769069541789736/Banner1.png?ex=687ba6be&is=687a553e&hm=a96e719147a26743f923afbe2337735c43a22a2a657e1b0cd2e53820b75b0ad0&=&format=webp&quality=lossless&width=843&height=24"
-
-bot = commands.Bot(command_prefix="/", intents=intents)
+# Banner for embeds and events
+EVENT_BANNER_URL = "https://media.discordapp.net/attachments/1395760490982150194/1395766076490387597/jet2-and-jet2holidays-logos-1.png?ex=688435b4&is=6882e434&hm=38d94f0257e83e2d98c3a2e6ce3d72326a0804207e8a3f1b202131d4e5f33f63&=&format=webp&quality=lossless&width=1275&height=303"
 
 @bot.event
 async def on_ready():
-    await bot.tree.sync(guild=discord.Object(id=guild_id))
-    print(f"Logged in as {bot.user}")
+    print(f"✅ Logged in as {bot.user} (ID: {bot.user.id})")
+    try:
+        synced = await tree.sync(guild=discord.Object(id=GUILD_ID))
+        print(f"✅ Synced {len(synced)} commands to guild {GUILD_ID}")
+    except Exception as e:
+        print(f"❌ Failed to sync commands: {e}")
 
-def generate_id():
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+# --------------------------- /affiliate_add ---------------------------
+@tree.command(name="affiliate_add", description="Add an affiliate", guild=discord.Object(id=GUILD_ID))
+@app_commands.checks.has_role(WHITELIST_ROLE_ID)
+@app_commands.describe(company="Company name", discord_link="Discord invite", roblox_group="Roblox group link")
+async def affiliate_add(interaction: discord.Interaction, company: str, discord_link: str, roblox_group: str):
+    embed = discord.Embed(title="Affiliate Added", color=discord.Color.red())
+    embed.add_field(name="Company", value=company, inline=False)
+    embed.add_field(name="Discord", value=discord_link, inline=False)
+    embed.add_field(name="Roblox Group", value=roblox_group, inline=False)
+    embed.set_image(url=EVENT_BANNER_URL)
+    embed.set_footer(text=f"Added by {interaction.user}", icon_url=interaction.user.avatar.url)
+    await interaction.response.send_message(embed=embed)
 
-def get_footer():
-    return f"ID: {generate_id()} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+# --------------------------- /affiliate_remove ---------------------------
+@tree.command(name="affiliate_remove", description="Remove an affiliate", guild=discord.Object(id=GUILD_ID))
+@app_commands.checks.has_role(WHITELIST_ROLE_ID)
+@app_commands.describe(company="Company name to remove")
+async def affiliate_remove(interaction: discord.Interaction, company: str):
+    embed = discord.Embed(title="Affiliate Removed", description=f"{company} has been removed.", color=discord.Color.red())
+    embed.set_image(url=EVENT_BANNER_URL)
+    embed.set_footer(text=f"Removed by {interaction.user}", icon_url=interaction.user.avatar.url)
+    await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="flight_schedule", description="Schedule a Jet2 flight", guild=discord.Object(id=guild_id))
-@app_commands.describe(
-    host="Host of the flight",
-    time="Time of the flight (e.g. 18:00 GMT)",
-    flight_info="Flight info (e.g. Bournemouth -> Punta Cana)",
-    aircraft_type="Aircraft used (e.g. B737-800)",
-    flight_code="Flight code (e.g. LS8800)"
-)
-async def flight_schedule(interaction: discord.Interaction, host: str, time: str, flight_info: str, aircraft_type: str, flight_code: str):
-    if SCHEDULE_ROLE_ID not in [role.id for role in interaction.user.roles]:
-        return await interaction.response.send_message("You do not have permission to use this.", ephemeral=True)
+# --------------------------- /embed ---------------------------
+@tree.command(name="embed", description="Send a custom embed (JSON from Discohook)", guild=discord.Object(id=GUILD_ID))
+@app_commands.checks.has_role(WHITELIST_ROLE_ID)
+@app_commands.describe(json="Raw Discohook-style JSON embed")
+async def custom_embed(interaction: discord.Interaction, json: str):
+    try:
+        data = discord.Embed.from_dict(eval(json))
+        await interaction.channel.send(embed=data)
+        await interaction.response.send_message("✅ Embed sent.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Failed to send embed: {e}", ephemeral=True)
 
-    start_time = datetime.now(timezone.utc) + timedelta(minutes=5)
-    end_time = start_time + timedelta(hours=1)
+# --------------------------- /flight_create ---------------------------
+@tree.command(name="flight_create", description="Create a new flight event", guild=discord.Object(id=GUILD_ID))
+@app_commands.checks.has_role(WHITELIST_ROLE_ID)
+@app_commands.describe(route="Flight route", start_time="Start time (DD/MM/YYYY HH:MM)", aircraft="Aircraft", flight_code="Flight code")
+async def flight_create(interaction: discord.Interaction, route: str, start_time: str, aircraft: str, flight_code: str):
+    try:
+        start_dt = datetime.strptime(start_time, "%d/%m/%Y %H:%M")
+        end_dt = start_dt + timedelta(hours=1)
 
-    event = await interaction.guild.create_scheduled_event(
-        name=f"Jet2 Flight - {flight_code}",
-        description=f"**Host:** {host}\n**Aircraft:** {aircraft_type}\n**Flight Schedule:** {flight_info}\n**Flight Code:** {flight_code}",
-        start_time=start_time,
-        end_time=end_time,
-        entity_type=discord.EntityType.external,
-        location="Jet2 Airport",
-        privacy_level=discord.PrivacyLevel.guild_only
-    )
+        scheduled_event = await interaction.guild.create_scheduled_event(
+            name=f"Flight {flight_code}",
+            description=f"**Route:** {route}\n**Aircraft:** {aircraft}\n**Flight Code:** {flight_code}",
+            start_time=start_dt,
+            end_time=end_dt,
+            entity_type=discord.EntityType.external,
+            location="Jet2 Virtual Gate",
+            privacy_level=discord.PrivacyLevel.guild_only
+        )
 
-    await interaction.response.send_message(f"Flight event created for **{flight_code}**. [View Event]({event.url})", ephemeral=False)
+        embed = discord.Embed(title="Flight Created", color=discord.Color.red())
+        embed.add_field(name="Route", value=route, inline=False)
+        embed.add_field(name="Aircraft", value=aircraft)
+        embed.add_field(name="Flight Code", value=flight_code)
+        embed.add_field(name="Start Time", value=start_dt.strftime("%d/%m/%Y %H:%M"))
+        embed.add_field(name="End Time", value=end_dt.strftime("%d/%m/%Y %H:%M"))
+        embed.set_image(url=EVENT_BANNER_URL)
+        embed.set_footer(text=f"Created by {interaction.user}", icon_url=interaction.user.avatar.url)
 
-@bot.tree.command(name="flight_announce", description="Announce a flight", guild=discord.Object(id=guild_id))
-@app_commands.describe(
-    time="Flight time",
-    flight_info="Flight info (e.g. Bournemouth -> Punta Cana)",
-    aircraft="Aircraft used",
-    airport_link="Airport link",
-    flight_code="Flight code",
-    channel_id="Channel ID to send announcement"
-)
-async def flight_announce(interaction: discord.Interaction, time: str, flight_info: str, aircraft: str, airport_link: str, flight_code: str, channel_id: str):
-    if ANNOUNCE_ROLE_ID not in [role.id for role in interaction.user.roles]:
-        return await interaction.response.send_message("You do not have permission to use this.", ephemeral=True)
+        channel = bot.get_channel(FLIGHT_CHANNEL_ID)
+        await channel.send(embed=embed)
+        await interaction.response.send_message("✅ Flight created and event posted.")
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error creating flight: {e}", ephemeral=True)
 
-    channel = bot.get_channel(int(channel_id))
-    if not channel:
-        return await interaction.response.send_message("Invalid channel ID.", ephemeral=True)
+# --------------------------- /flight_host ---------------------------
+@tree.command(name="flight_host", description="Announce an existing flight", guild=discord.Object(id=GUILD_ID))
+@app_commands.checks.has_role(WHITELIST_ROLE_ID)
+@app_commands.describe(route="Route", aircraft="Aircraft", flight_code="Flight code", host="Host user")
+async def flight_host(interaction: discord.Interaction, route: str, aircraft: str, flight_code: str, host: discord.Member):
+    embed = discord.Embed(title="Flight Announcement", color=discord.Color.red())
+    embed.add_field(name="Route", value=route)
+    embed.add_field(name="Aircraft", value=aircraft)
+    embed.add_field(name="Flight Code", value=flight_code)
+    embed.add_field(name="Host", value=host.mention)
+    embed.set_image(url=EVENT_BANNER_URL)
+    embed.set_footer(text=f"Announced by {interaction.user}", icon_url=interaction.user.avatar.url)
 
-    embed = discord.Embed(
-        title=":airplane: FLIGHT ANNOUNCEMENT",
-        description=f"There is a flight today at {time}. We will be operating the {aircraft}.\nThis flight will be from {flight_info}.\n\nWe hope to see you attend **{flight_code}**!",
-        color=discord.Color.red()
-    )
-    embed.set_image(url=BANNER_URL)
-    embed.set_footer(text=get_footer())
-
-    await channel.send("@everyone")
+    channel = bot.get_channel(FLIGHT_CHANNEL_ID)
     await channel.send(embed=embed)
-    await interaction.response.send_message("Flight announced.", ephemeral=True)
+    await interaction.response.send_message("✅ Flight announcement sent.")
 
-@bot.tree.command(name="infract", description="Discipline a staff member", guild=discord.Object(id=guild_id))
-@app_commands.describe(
-    user="User to discipline",
-    reason="Reason for infraction",
-    type="Type of action (Termination / Infraction / Demotion)",
-    demotion_role="(Optional) Role if demotion"
-)
-async def infract(interaction: discord.Interaction, user: discord.Member, reason: str, type: str, demotion_role: discord.Role = None):
-    if interaction.channel.id != allowed_channel_id:
-        return await interaction.response.send_message("This command can only be used in the designated channel.", ephemeral=True)
-    if INFRACT_ROLE_ID not in [role.id for role in interaction.user.roles]:
-        return await interaction.response.send_message("You do not have permission to use this.", ephemeral=True)
+# --------------------------- Error Handling ---------------------------
+@tree.error
+async def on_app_command_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.errors.MissingRole):
+        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Error: {error}", ephemeral=True)
 
-    embed = discord.Embed(
-        title="Infraction Notice",
-        description=f"**Infracted By:** {interaction.user.mention}\n**User:** {user.mention}\n**Type:** {type}\n**Reason:** {reason}",
-        color=0x8b2828
-    )
-    embed.set_image(url=BANNER_URL)
-    embed.set_footer(text=get_footer())
-
-    await interaction.channel.send(user.mention)
-    await interaction.channel.send(embed=embed)
-    await interaction.response.send_message("Infraction logged.", ephemeral=True)
-
-@bot.tree.command(name="promote", description="Promote a staff member", guild=discord.Object(id=guild_id))
-@app_commands.describe(
-    user="User to promote",
-    promotion_to="New role or title",
-    reason="Reason for promotion"
-)
-async def promote(interaction: discord.Interaction, user: discord.Member, promotion_to: str, reason: str):
-    if interaction.channel.id != allowed_channel_id:
-        return await interaction.response.send_message("This command can only be used in the designated channel.", ephemeral=True)
-    if PROMOTE_ROLE_ID not in [role.id for role in interaction.user.roles]:
-        return await interaction.response.send_message("You do not have permission to use this.", ephemeral=True)
-
-    embed = discord.Embed(
-        title="Promotion Notice",
-        description=f"**Promoted By:** {interaction.user.mention}\n**User:** {user.mention}\n**Promotion To:** {promotion_to}\n**Reason:** {reason}",
-        color=0x8b2828
-    )
-    embed.set_image(url=BANNER_URL)
-    embed.set_footer(text=get_footer())
-
-    await interaction.channel.send(user.mention)
-    await interaction.channel.send(embed=embed)
-    await interaction.response.send_message("Promotion logged.", ephemeral=True)
-
-@bot.tree.command(name="flight_log", description="Log a flight", guild=discord.Object(id=guild_id))
-@app_commands.describe(
-    user="User who hosted the flight",
-    evidence="Image evidence of flight",
-    session_date="Date of the session",
-    flight_code="Flight code"
-)
-async def flight_log(interaction: discord.Interaction, user: discord.Member, evidence: discord.Attachment, session_date: str, flight_code: str):
-    if interaction.channel.id != allowed_channel_id:
-        return await interaction.response.send_message("This command can only be used in the designated channel.", ephemeral=True)
-    if LOG_ROLE_ID not in [role.id for role in interaction.user.roles]:
-        return await interaction.response.send_message("You do not have permission to use this.", ephemeral=True)
-
-    if not evidence.content_type.startswith("image"):
-        return await interaction.response.send_message("Please upload a valid image as evidence.", ephemeral=True)
-
-    embed = discord.Embed(
-        title="Flight Log",
-        description=f"**Logged By:** {interaction.user.mention}\n**User:** {user.mention}\n**Flight Code:** {flight_code}\n**Session Date:** {session_date}",
-        color=0x8b2828
-    )
-    embed.set_image(url=evidence.url)
-    embed.set_footer(text=get_footer())
-
-    await interaction.channel.send(user.mention)
-    await interaction.channel.send(embed=embed)
-    await interaction.response.send_message("Flight log submitted.", ephemeral=True)
-
-bot.run(token)
+bot.run(TOKEN)
