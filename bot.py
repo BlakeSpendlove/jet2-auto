@@ -11,8 +11,7 @@ SCHEDULE_ROLE_ID = int(os.getenv("SCHEDULE_ROLE_ID", 0))
 AFFILIATE_CHANNEL_ID = int(os.getenv("AFFILIATE_CHANNEL_ID", 0))
 BANNER_URL = os.getenv("BANNER_URL")
 
-# Jet2 dark red color for embeds (replace if needed)
-JET2_DARK_RED = 0x8B0000  # Dark red
+JET2_DARK_RED = 0x8B0000  # Dark red color
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -26,10 +25,14 @@ def add_banner(embed: discord.Embed) -> discord.Embed:
 def has_schedule_role():
     def predicate(interaction: discord.Interaction) -> bool:
         if SCHEDULE_ROLE_ID == 0:
-            return True  # If not set, allow all
+            return True  # Allow all if role not set
         role = discord.utils.get(interaction.user.roles, id=SCHEDULE_ROLE_ID)
         return role is not None
     return app_commands.check(predicate)
+
+def has_affiliate_role():
+    # Reuse schedule role for affiliate commands, or you can create a separate role variable if needed
+    return has_schedule_role()
 
 @bot.event
 async def on_ready():
@@ -46,6 +49,7 @@ async def on_ready():
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("Pong!")
 
+# --- Flight Create Command ---
 @tree.command(name="flight_create", description="Create a flight event", guild=discord.Object(id=GUILD_ID))
 @has_schedule_role()
 @app_commands.describe(
@@ -97,6 +101,7 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
     except Exception as e:
         await interaction.response.send_message(f"Error creating event: {e}", ephemeral=True)
 
+# --- Flight Host Command ---
 @tree.command(name="flight_host", description="Send a flight announcement", guild=discord.Object(id=GUILD_ID))
 @has_schedule_role()
 @app_commands.describe(
@@ -138,6 +143,62 @@ async def flight_host(interaction: discord.Interaction, route: str, aircraft: st
 
     await interaction.response.send_message(content=message_content, embed=embed)
 
-# Add your other commands here, use AFFILIATE_CHANNEL_ID, BANNER_URL, and role checks as needed
+# --- Affiliate Add Command ---
+@tree.command(name="affiliate_add", description="Add an affiliate", guild=discord.Object(id=GUILD_ID))
+@has_affiliate_role()
+@app_commands.describe(
+    company_name="Name of the affiliate company",
+    discord_link="Discord invite or link",
+    roblox_group="Roblox group URL or ID"
+)
+async def affiliate_add(interaction: discord.Interaction, company_name: str, discord_link: str, roblox_group: str):
+    channel = bot.get_channel(AFFILIATE_CHANNEL_ID)
+    if channel is None:
+        await interaction.response.send_message("Affiliate channel not found or not set.", ephemeral=True)
+        return
+
+    embed = discord.Embed(
+        title=f"Affiliate Added: {company_name}",
+        description=f"Discord: {discord_link}\nRoblox Group: {roblox_group}",
+        color=JET2_DARK_RED,
+        timestamp=datetime.utcnow()
+    )
+    embed.set_footer(text=f"Added by {interaction.user}", icon_url=interaction.user.display_avatar.url)
+    embed = add_banner(embed)
+
+    await channel.send(embed=embed)
+    await interaction.response.send_message(f"Affiliate **{company_name}** added successfully.", ephemeral=True)
+
+# --- Affiliate Remove Command ---
+@tree.command(name="affiliate_remove", description="Remove an affiliate", guild=discord.Object(id=GUILD_ID))
+@has_affiliate_role()
+@app_commands.describe(
+    company_name="Name of the affiliate company to remove"
+)
+async def affiliate_remove(interaction: discord.Interaction, company_name: str):
+    channel = bot.get_channel(AFFILIATE_CHANNEL_ID)
+    if channel is None:
+        await interaction.response.send_message("Affiliate channel not found or not set.", ephemeral=True)
+        return
+
+    # In a real bot, you might search messages or have a database.
+    # For this example, just send a confirmation message.
+    await interaction.response.send_message(f"Affiliate **{company_name}** removed (manual action required).", ephemeral=True)
+
+# --- Embed Command ---
+@tree.command(name="embed", description="Send a custom embed from Discohook JSON", guild=discord.Object(id=GUILD_ID))
+@has_affiliate_role()
+@app_commands.describe(
+    json_content="JSON content for the embed (must be valid Discohook format)"
+)
+async def embed_command(interaction: discord.Interaction, json_content: str):
+    import json
+    try:
+        embed_data = json.loads(json_content)
+        embed = discord.Embed.from_dict(embed_data)
+        embed = add_banner(embed)
+        await interaction.response.send_message(embed=embed)
+    except Exception as e:
+        await interaction.response.send_message(f"Invalid JSON or error: {e}", ephemeral=True)
 
 bot.run(DISCORD_TOKEN)
