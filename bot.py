@@ -1,9 +1,10 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 import os
 import asyncio
+import json
 
 # Load environment variables from Railway
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -11,20 +12,33 @@ GUILD_ID = int(os.getenv("GUILD_ID"))
 SCHEDULE_ROLE_ID = int(os.getenv("SCHEDULE_ROLE_ID"))
 
 intents = discord.Intents.default()
-intents.members = True  # Needed to get user roles
 bot = commands.Bot(command_prefix="!", intents=intents)
-tree = bot.tree
+
+tree = bot.tree  # Use existing command tree
+
+def has_schedule_role():
+    def predicate(interaction: discord.Interaction):
+        if interaction.user.guild_permissions.administrator:
+            return True
+        roles = interaction.user.roles if hasattr(interaction.user, "roles") else []
+        return any(role.id == SCHEDULE_ROLE_ID for role in roles)
+    return app_commands.check(predicate)
 
 @bot.event
 async def on_ready():
-    await tree.sync(guild=discord.Object(id=GUILD_ID))
-    print(f"✅ Logged in as {bot.user} and commands synced to guild {GUILD_ID}")
+    print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    guild = discord.Object(id=GUILD_ID)
+    await tree.sync(guild=guild)
+    print("Commands synced.")
 
-@tree.command(name="ping", description="Ping the bot", guild=discord.Object(id=GUILD_ID))
+# /ping command
+@tree.command(name="ping", description="Simple ping command", guild=discord.Object(id=GUILD_ID))
 async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message("🏓 Pong!")
+    await interaction.response.send_message("Pong!")
 
+# /flight_create command
 @tree.command(name="flight_create", description="Create a flight event", guild=discord.Object(id=GUILD_ID))
+@has_schedule_role()
 @app_commands.describe(
     route="Flight route (e.g. LHR to JFK)",
     start_date="Start date in DD/MM/YYYY",
@@ -32,68 +46,103 @@ async def ping(interaction: discord.Interaction):
     aircraft="Aircraft type (e.g. B737-800)",
     flight_code="Flight code (e.g. LS8800)"
 )
-async def flight_create(
-    interaction: discord.Interaction,
-    route: str,
-    start_date: str,
-    start_time: str,
-    aircraft: str,
-    flight_code: str
-):
-    # Role check
-    if not any(role.id == SCHEDULE_ROLE_ID for role in interaction.user.roles):
-        await interaction.response.send_message("❌ You do not have permission to use this command.", ephemeral=True)
-        return
-
+async def flight_create(interaction: discord.Interaction, route: str, start_date: str, start_time: str, aircraft: str, flight_code: str):
     try:
-        # Parse local datetime
-        local_dt = datetime.strptime(f"{start_date} {start_time}", "%d/%m/%Y %H:%M")
-        start_dt_utc = local_dt.replace(tzinfo=timezone.utc)
-        end_dt_utc = start_dt_utc + timedelta(hours=1)
+        start_dt = datetime.strptime(f"{start_date} {start_time}", "%d/%m/%Y %H:%M")
+        end_dt = start_dt + timedelta(hours=1)
 
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message("❌ This command must be used in a server.", ephemeral=True)
+            await interaction.response.send_message("This command must be used in a guild.", ephemeral=True)
             return
 
-        # Create event
+        # Create scheduled event
         event = await guild.create_scheduled_event(
             name=f"Flight {flight_code} - {route}",
-            start_time=start_dt_utc,
-            end_time=end_dt_utc,
-            description=f"✈️ Aircraft: {aircraft}\n🛫 Route: {route}\n🆔 Flight Code: {flight_code}\n👨‍✈️ Host: {interaction.user.mention}",
+            start_time=start_dt,
+            end_time=end_dt,
+            description=f"Host: <@{interaction.user.id}>\nAircraft: {aircraft}\nRoute: {route}\nFlight code: {flight_code}",
             privacy_level=discord.PrivacyLevel.guild_only,
             entity_type=discord.EntityType.external,
             location="Online / Virtual"
         )
 
-        await interaction.response.send_message(
-            f"✅ Flight event **{event.name}** created for **{local_dt.strftime('%d/%m/%Y %H:%M')}**!"
-        )
+        # Schedule DM 15 mins before flight at XX:40 if start time is XX:55
+        async def dm_host():
+            await discord.utils.sleep_until(start_dt.replace(minute=40, second=0, microsecond=0))
+            try:
+                await interaction.user.send(f"Reminder: Your flight {flight_code} event starts at {start_dt.strftime('%H:%M')} (15 minutes from now).")
+            except Exception:
+                print(f"Could not send DM to {interaction.user}.")
 
-        # DM reminder at XX:40
-        reminder_time = local_dt.replace(minute=40, second=0)
-        delay = (reminder_time - datetime.utcnow()).total_seconds()
+        bot.loop.create_task(dm_host())
 
-        if delay > 0:
-            async def send_reminder():
-                await asyncio.sleep(delay)
-                try:
-                    await interaction.user.send(
-                        f"🛫 **Reminder:** Your flight **{flight_code} - {route}** starts at {local_dt.strftime('%H:%M')}.\nBe ready to host!"
-                    )
-                except:
-                    print("⚠️ Failed to send DM to host.")
-            bot.loop.create_task(send_reminder())
-        else:
-            print("⏰ Reminder time already passed. Skipping DM.")
+        await interaction.response.send_message(f"Flight event created: {event.name} starting at {start_dt.strftime('%d/%m/%Y %H:%M')}")
 
     except ValueError:
-        await interaction.response.send_message(
-            "❌ Invalid date or time format. Use **DD/MM/YYYY** for date and **HH:MM** (24h format).",
-            ephemeral=True
-        )
+        await interaction.response.send_message("❌ Invalid date or time format. Use DD/MM/YYYY for date and HH:MM for time (24h format).", ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
+        await interaction.response.send_message(f"Error creating event: {e}", ephemeral=True)
+
+# /embed command
+@tree.command(name="embed", description="Send a custom embed (JSON from Discohook)", guild=discord.Object(id=GUILD_ID))
+@has_schedule_role()
+@app_commands.describe(json_string="JSON string for the embed")
+async def embed(interaction: discord.Interaction, json_string: str):
+    try:
+        embed_data = json.loads(json_string)
+        embed = discord.Embed.from_dict(embed_data)
+        await interaction.response.send_message(embed=embed)
+    except Exception as e:
+        await interaction.response.send_message(f"Failed to send embed: {e}", ephemeral=True)
+
+# /affiliate_add command
+@tree.command(name="affiliate_add", description="Add an affiliate", guild=discord.Object(id=GUILD_ID))
+@has_schedule_role()
+@app_commands.describe(
+    company="Affiliate company name",
+    discord_link="Affiliate Discord invite link",
+    roblox_group="Roblox group link"
+)
+async def affiliate_add(interaction: discord.Interaction, company: str, discord_link: str, roblox_group: str):
+    embed = discord.Embed(
+        title=f"Affiliate Added: {company}",
+        description=f"Discord: {discord_link}\nRoblox Group: {roblox_group}",
+        color=discord.Color.blue(),
+        timestamp=datetime.utcnow()
+    )
+    embed.set_footer(text="Affiliate Management")
+    await interaction.response.send_message(embed=embed)
+
+# /affiliate_remove command
+@tree.command(name="affiliate_remove", description="Remove an affiliate by company name", guild=discord.Object(id=GUILD_ID))
+@has_schedule_role()
+@app_commands.describe(company="Affiliate company name to remove")
+async def affiliate_remove(interaction: discord.Interaction, company: str):
+    embed = discord.Embed(
+        title=f"Affiliate Removed: {company}",
+        color=discord.Color.red(),
+        timestamp=datetime.utcnow()
+    )
+    embed.set_footer(text="Affiliate Management")
+    await interaction.response.send_message(embed=embed)
+
+# /flight_host command
+@tree.command(name="flight_host", description="Send a flight announcement", guild=discord.Object(id=GUILD_ID))
+@has_schedule_role()
+@app_commands.describe(
+    route="Flight route (e.g. LHR to JFK)",
+    aircraft="Aircraft type",
+    flight_code="Flight code"
+)
+async def flight_host(interaction: discord.Interaction, route: str, aircraft: str, flight_code: str):
+    embed = discord.Embed(
+        title=f"Flight Announcement: {flight_code}",
+        description=f"Route: {route}\nAircraft: {aircraft}\nHost: <@{interaction.user.id}>",
+        color=discord.Color.green(),
+        timestamp=datetime.utcnow()
+    )
+    embed.set_footer(text="Flight Announcements")
+    await interaction.response.send_message(embed=embed)
 
 bot.run(DISCORD_TOKEN)
