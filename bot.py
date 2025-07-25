@@ -10,11 +10,14 @@ import json
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID"))
 SCHEDULE_ROLE_ID = int(os.getenv("SCHEDULE_ROLE_ID"))
+AFFILIATE_CHANNEL_ID = int(os.getenv("AFFILIATE_CHANNEL_ID"))
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 tree = bot.tree  # Use existing command tree
+
+JET2_DARK_RED = 0x8B0000  # Dark Red color hex (can be adjusted if needed)
 
 def has_schedule_role():
     def predicate(interaction: discord.Interaction):
@@ -31,12 +34,10 @@ async def on_ready():
     await tree.sync(guild=guild)
     print("Commands synced.")
 
-# /ping command
 @tree.command(name="ping", description="Simple ping command", guild=discord.Object(id=GUILD_ID))
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("Pong!")
 
-# /flight_create command
 @tree.command(name="flight_create", description="Create a flight event", guild=discord.Object(id=GUILD_ID))
 @has_schedule_role()
 @app_commands.describe(
@@ -56,7 +57,6 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
             await interaction.response.send_message("This command must be used in a guild.", ephemeral=True)
             return
 
-        # Create scheduled event
         event = await guild.create_scheduled_event(
             name=f"Flight {flight_code} - {route}",
             start_time=start_dt,
@@ -67,7 +67,6 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
             location="Online / Virtual"
         )
 
-        # Schedule DM 15 mins before flight at XX:40 if start time is XX:55
         async def dm_host():
             await discord.utils.sleep_until(start_dt.replace(minute=40, second=0, microsecond=0))
             try:
@@ -84,7 +83,6 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
     except Exception as e:
         await interaction.response.send_message(f"Error creating event: {e}", ephemeral=True)
 
-# /embed command
 @tree.command(name="embed", description="Send a custom embed (JSON from Discohook)", guild=discord.Object(id=GUILD_ID))
 @has_schedule_role()
 @app_commands.describe(json_string="JSON string for the embed")
@@ -96,7 +94,6 @@ async def embed(interaction: discord.Interaction, json_string: str):
     except Exception as e:
         await interaction.response.send_message(f"Failed to send embed: {e}", ephemeral=True)
 
-# /affiliate_add command
 @tree.command(name="affiliate_add", description="Add an affiliate", guild=discord.Object(id=GUILD_ID))
 @has_schedule_role()
 @app_commands.describe(
@@ -108,26 +105,37 @@ async def affiliate_add(interaction: discord.Interaction, company: str, discord_
     embed = discord.Embed(
         title=f"Affiliate Added: {company}",
         description=f"Discord: {discord_link}\nRoblox Group: {roblox_group}",
-        color=discord.Color.blue(),
+        color=JET2_DARK_RED,
         timestamp=datetime.utcnow()
     )
     embed.set_footer(text="Affiliate Management")
-    await interaction.response.send_message(embed=embed)
 
-# /affiliate_remove command
+    # Send embed to affiliate channel
+    channel = bot.get_channel(AFFILIATE_CHANNEL_ID)
+    if channel:
+        await channel.send(embed=embed)
+        await interaction.response.send_message(f"Affiliate {company} added and logged.", ephemeral=True)
+    else:
+        await interaction.response.send_message("Affiliate channel not found.", ephemeral=True)
+
 @tree.command(name="affiliate_remove", description="Remove an affiliate by company name", guild=discord.Object(id=GUILD_ID))
 @has_schedule_role()
 @app_commands.describe(company="Affiliate company name to remove")
 async def affiliate_remove(interaction: discord.Interaction, company: str):
     embed = discord.Embed(
         title=f"Affiliate Removed: {company}",
-        color=discord.Color.red(),
+        color=JET2_DARK_RED,
         timestamp=datetime.utcnow()
     )
     embed.set_footer(text="Affiliate Management")
-    await interaction.response.send_message(embed=embed)
 
-# /flight_host command
+    channel = bot.get_channel(AFFILIATE_CHANNEL_ID)
+    if channel:
+        await channel.send(embed=embed)
+        await interaction.response.send_message(f"Affiliate {company} removed and logged.", ephemeral=True)
+    else:
+        await interaction.response.send_message("Affiliate channel not found.", ephemeral=True)
+
 @tree.command(name="flight_host", description="Send a flight announcement", guild=discord.Object(id=GUILD_ID))
 @has_schedule_role()
 @app_commands.describe(
@@ -139,7 +147,7 @@ async def flight_host(interaction: discord.Interaction, route: str, aircraft: st
     embed = discord.Embed(
         title=f"Flight Announcement: {flight_code}",
         description=f"Route: {route}\nAircraft: {aircraft}\nHost: <@{interaction.user.id}>",
-        color=discord.Color.green(),
+        color=JET2_DARK_RED,
         timestamp=datetime.utcnow()
     )
     embed.set_footer(text="Flight Announcements")
