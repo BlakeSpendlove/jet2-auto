@@ -3,8 +3,11 @@ import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
+from discord.utils import utcnow
+import json
 
+# Load environment variables
+from dotenv import load_dotenv
 load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -13,6 +16,7 @@ SCHEDULE_ROLE_ID = int(os.getenv("SCHEDULE_ROLE_ID"))
 AFFILIATE_CHANNEL_ID = int(os.getenv("AFFILIATE_CHANNEL_ID"))
 BANNER_URL = os.getenv("BANNER_URL")
 
+# Bot setup
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
@@ -25,15 +29,18 @@ def is_scheduler():
         return any(role.id == SCHEDULE_ROLE_ID for role in interaction.user.roles)
     return app_commands.check(predicate)
 
+# On ready
 @bot.event
 async def on_ready():
     await tree.sync(guild=discord.Object(id=GUILD_ID))
     print(f"Logged in as {bot.user} and commands synced.")
 
+# Ping command
 @tree.command(name="ping", description="Check bot responsiveness", guild=discord.Object(id=GUILD_ID))
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("Pong!")
 
+# Create a flight event
 @tree.command(name="flight_create", description="Create a flight event", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
     route="Flight route (e.g. LHR to JFK)",
@@ -45,8 +52,11 @@ async def ping(interaction: discord.Interaction):
 @is_scheduler()
 async def flight_create(interaction: discord.Interaction, route: str, start_date: str, start_time: str, aircraft: str, flight_code: str):
     try:
-        start_dt = datetime.strptime(f"{start_date} {start_time}", "%d/%m/%Y %H:%M")
+        # Convert to timezone-aware datetime in UTC
+        start_dt_naive = datetime.strptime(f"{start_date} {start_time}", "%d/%m/%Y %H:%M")
+        start_dt = start_dt_naive.replace(tzinfo=utcnow().tzinfo)
         end_dt = start_dt + timedelta(hours=1)
+
         guild = interaction.guild
 
         event = await guild.create_scheduled_event(
@@ -64,12 +74,12 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
             location="Online / Virtual"
         )
 
-        # DM host 15 mins before flight (at XX:40 if flight is XX:55)
+        # Notify host 15 minutes before
         notify_time = start_dt - timedelta(minutes=15)
 
         @tasks.loop(seconds=30)
         async def notify_host():
-            if datetime.utcnow() >= notify_time:
+            if datetime.now(tz=start_dt.tzinfo) >= notify_time:
                 try:
                     await interaction.user.send(f"Reminder: Your flight '{flight_code}' starts at {start_dt.strftime('%H:%M')}! Prepare the airport.")
                 except:
@@ -82,6 +92,7 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
+# Flight host announcement
 @tree.command(name="flight_host", description="Send flight announcement", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
     route="Flight route (e.g. LHR to JFK)",
@@ -125,6 +136,7 @@ async def flight_host(interaction: discord.Interaction, route: str, aircraft: st
         allowed_mentions=discord.AllowedMentions(everyone=True)
     )
 
+# Add an affiliate
 @tree.command(name="affiliate_add", description="Add an affiliate", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
     company_name="Name of the company",
@@ -151,6 +163,7 @@ async def affiliate_add(interaction: discord.Interaction, company_name: str, dis
     await channel.send(embed=embed)
     await interaction.response.send_message(f"✅ Affiliate added and logged in <#{AFFILIATE_CHANNEL_ID}>", ephemeral=True)
 
+# Remove an affiliate
 @tree.command(name="affiliate_remove", description="Remove an affiliate", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(company_name="Company name to remove")
 @is_scheduler()
@@ -169,12 +182,12 @@ async def affiliate_remove(interaction: discord.Interaction, company_name: str):
     await channel.send(embed=embed)
     await interaction.response.send_message(f"✅ Affiliate removed and logged in <#{AFFILIATE_CHANNEL_ID}>", ephemeral=True)
 
+# Custom embed sender
 @tree.command(name="embed", description="Send a custom embed from Discohook JSON", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(json_code="Embed JSON code from Discohook")
 @is_scheduler()
 async def embed(interaction: discord.Interaction, json_code: str):
     try:
-        import json
         data = json.loads(json_code)
         emb = discord.Embed.from_dict(data["embeds"][0])
         await interaction.channel.send(embed=emb)
@@ -182,4 +195,5 @@ async def embed(interaction: discord.Interaction, json_code: str):
     except Exception as e:
         await interaction.response.send_message(f"❌ Invalid JSON: {e}", ephemeral=True)
 
+# Run the bot
 bot.run(TOKEN)
