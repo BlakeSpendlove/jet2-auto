@@ -196,21 +196,35 @@ async def embed(interaction: discord.Interaction, json_code: str):
         await interaction.response.send_message(f"❌ Invalid JSON: {e}", ephemeral=True)
 
 # DM a user with a Discohook embed
+from discord import app_commands, Interaction, User, Embed
+import discord
+import json
+
 @tree.command(name="dm", description="Send a JSON-formatted embed to a user.")
-@app_commands.describe(user="User to DM", json_embed="Valid embed JSON text")
-async def dm(interaction: discord.Interaction, user: discord.User, json_embed: str):
-    await interaction.response.defer(ephemeral=True)  # Prevents timeout error
-
+@app_commands.describe(
+    user="User to DM",
+    json_embed="Valid embed JSON structure (excluding outer curly braces)"
+)
+async def dm(interaction: Interaction, user: User, json_embed: str):
     try:
-        embed_data = json.loads(json_embed)
-        embed = discord.Embed.from_dict(embed_data)
+        # Attempt to parse the embed JSON
+        embed_data = json.loads("{" + json_embed + "}")
+        embed = Embed().from_dict(embed_data["embeds"][0]) if "embeds" in embed_data else None
 
+        if not embed:
+            await interaction.response.send_message("❌ No embed content found.", ephemeral=True)
+            return
+
+        # Send embed as a DM
         await user.send(embed=embed)
-
-        await interaction.followup.send(f"✅ Embed sent to {user.mention}.", ephemeral=True)
+        await interaction.response.send_message(f"✅ Embed sent to {user.mention}.", ephemeral=True)
 
     except Exception as e:
-        await interaction.followup.send(f"❌ Failed to send DM: `{e}`", ephemeral=True)
+        if interaction.response.is_done():
+            await interaction.followup.send(f"❌ Invalid JSON or DM failed: {e}", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"❌ Invalid JSON or DM failed: {e}", ephemeral=True)
+
 
 # Run the bot
 bot.run(TOKEN)
