@@ -195,5 +195,27 @@ async def embed(interaction: discord.Interaction, json_code: str):
     except Exception as e:
         await interaction.response.send_message(f"❌ Invalid JSON: {e}", ephemeral=True)
 
+# DM a user with a Discohook embed
+@tree.command(name="dm", description="DM a user a Discohook-style embed", guild=discord.Object(id=GUILD_ID))
+@app_commands.describe(
+    user="User to DM",
+    json_code="Embed JSON from Discohook (must contain 'embeds')"
+)
+@is_scheduler()
+async def dm(interaction: discord.Interaction, user: discord.User, json_code: str):
+    try:
+        data = json.loads(json_code)
+        embeds = data.get("embeds", [])
+        if not embeds:
+            await interaction.response.send_message("❌ No embeds found in the JSON.", ephemeral=True)
+            return
+
+        embed = discord.Embed.from_dict(embeds[0])
+        await user.send(embed=embed)
+        await interaction.response.send_message(f"✅ Embed sent to {user.mention}.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Invalid JSON or DM failed: {e}", ephemeral=True)
+
+
 # Run the bot
 bot.run(TOKEN)
