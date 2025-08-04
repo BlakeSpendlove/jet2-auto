@@ -15,6 +15,7 @@ GUILD_ID = int(os.getenv("GUILD_ID"))
 SCHEDULE_ROLE_ID = int(os.getenv("SCHEDULE_ROLE_ID"))
 AFFILIATE_CHANNEL_ID = int(os.getenv("AFFILIATE_CHANNEL_ID"))
 BANNER_URL = os.getenv("BANNER_URL")
+STAFF_FLIGHT_ID = os.getenv("STAFF_FLIGHT_ID")
 
 # Bot setup
 intents = discord.Intents.default()
@@ -59,6 +60,7 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
 
         guild = interaction.guild
 
+        # First create the scheduled event
         event = await guild.create_scheduled_event(
             name=f"Flight {flight_code} - {route}",
             start_time=start_dt,
@@ -73,6 +75,38 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
             entity_type=discord.EntityType.external,
             location="Online / Virtual"
         )
+
+        # Now send staff ping to the STAFF_FLIGHT_ID channel
+        try:
+            staff_channel_id = int(STAFF_FLIGHT_ID)
+            staff_channel = await bot.fetch_channel(staff_channel_id)
+            staff_msg = await staff_channel.send(
+                content=f"**FLIGHT {flight_code}**\n@everyone\n\n{event.url}\n\n**Please confirm your attendance below.**",
+                allowed_mentions=discord.AllowedMentions(everyone=True)
+            )
+            await staff_msg.add_reaction("🟩")
+            await staff_msg.add_reaction("🟨")
+            await staff_msg.add_reaction("🟥")
+        except Exception as e:
+            print(f"[ERROR] Could not send staff confirmation message: {e}")
+
+        # Schedule host notification
+        notify_time = start_dt - timedelta(minutes=15)
+
+        @tasks.loop(seconds=30)
+        async def notify_host():
+            if datetime.now(tz=start_dt.tzinfo) >= notify_time:
+                try:
+                    await interaction.user.send(f"Reminder: Your flight '{flight_code}' starts at {start_dt.strftime('%H:%M')}! Prepare the airport.")
+                except:
+                    print("Could not DM host.")
+                notify_host.stop()
+
+        notify_host.start()
+
+        await interaction.response.send_message(f"✅ Flight event created: {event.name} at {start_dt.strftime('%d/%m/%Y %H:%M')}")
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
         # Notify host 15 minutes before
         notify_time = start_dt - timedelta(minutes=15)
