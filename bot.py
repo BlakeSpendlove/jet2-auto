@@ -158,7 +158,7 @@ async def flight_host(interaction: discord.Interaction, route: str, aircraft: st
         color=JET2_DARK_RED,
         timestamp=datetime.utcnow()
     )
-    embed.add_field(name="🕹️ Game", value="[Join Jet2 Manchester Airport](https://www.roblox.com/games/81805367979166/Jet2-Manchester-Airport-T2)", inline=False)
+    embed.add_field(name="🕹️ Game", value="[Join Jet2 Manchester Airport](https://www.roblox.com/games/117460430857307/Jet2-rbx-Paphos-International-Airport)", inline=False)
     embed.add_field(name="📅 Event", value=f"[Click to View Event]({event.url})", inline=False)
     embed.set_footer(text="Flight Announcements")
     if BANNER_URL:
