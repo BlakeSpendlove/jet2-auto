@@ -108,8 +108,8 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
-        # Notify host 15 minutes before
-        notify_time = start_dt - timedelta(minutes=15)
+        # Notify host 20 minutes before
+        notify_time = start_dt - timedelta(minutes=20)
 
         @tasks.loop(seconds=30)
         async def notify_host():
