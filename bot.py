@@ -91,7 +91,7 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
             print(f"[ERROR] Could not send staff confirmation message: {e}")
 
         # Schedule host notification
-        notify_time = start_dt - timedelta(minutes=15)
+        notify_time = start_dt - timedelta(minutes=20)
 
         @tasks.loop(seconds=30)
         async def notify_host():
