@@ -22,7 +22,7 @@ intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
-JET2_DARK_RED = discord.Color.from_str("#B00000")
+JET2_DARK_RED = discord.Color.from_str("#193E75")
 
 # Permissions check
 def is_scheduler():
