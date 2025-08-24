@@ -25,6 +25,16 @@ tree = bot.tree
 
 JET2_DARK_RED = discord.Color.from_str("#193e75")
 
+# Define available routes in one place
+ROUTES = [
+    {
+        "code": "FR4813",
+        "text": "Pafos International Airport → Bristol Airport",
+        "env": "FR4813_GAME_LINK"
+    }
+    # Add more routes here later
+]
+
 # Permissions check
 def is_scheduler():
     async def predicate(interaction: discord.Interaction):
@@ -47,14 +57,17 @@ async def ping(interaction: discord.Interaction):
 @app_commands.describe(
     start_date="Start date in DD/MM/YYYY",
     start_time="Start time in 24h format HH:MM",
-    aircraft="Aircraft type (e.g. B737-800)"
+    aircraft="Aircraft type (e.g. B737-800)",
+    route="Select a route"
 )
+@app_commands.choices(route=[
+    app_commands.Choice(name=f"{r['code']} {r['text']}", value=f"{r['code']}|{r['text']}") for r in ROUTES
+])
 @is_scheduler()
-async def flight_create(interaction: discord.Interaction, start_date: str, start_time: str, aircraft: str):
+async def flight_create(interaction: discord.Interaction, start_date: str, start_time: str, aircraft: str, route: app_commands.Choice[str]):
     try:
-        # Fixed route and flight code
-        route = "Pafos International Airport → Bristol Airport"
-        flight_code = "FR4813"
+        # Extract flight_code and route_text from choice
+        flight_code, route_text = route.value.split("|", 1)
 
         # Convert to timezone-aware datetime in UTC
         start_dt_naive = datetime.strptime(f"{start_date} {start_time}", "%d/%m/%Y %H:%M")
@@ -65,12 +78,12 @@ async def flight_create(interaction: discord.Interaction, start_date: str, start
 
         # Create the scheduled event
         event = await guild.create_scheduled_event(
-            name=f"Flight {flight_code} - {route}",
+            name=f"Flight {flight_code} - {route_text}",
             start_time=start_dt,
             end_time=end_dt,
             description=(
                 f"Aircraft: {aircraft}\n"
-                f"Route: {route}\n"
+                f"Route: {route_text}\n"
                 f"Flight code: {flight_code}\n"
                 f"Host: {interaction.user.mention}"
             ),
@@ -79,7 +92,7 @@ async def flight_create(interaction: discord.Interaction, start_date: str, start
             location="Online / Virtual"
         )
 
-        # Send staff ping to STAFF_FLIGHT_ID channel
+        # Send staff ping
         try:
             staff_channel_id = int(STAFF_FLIGHT_ID)
             staff_channel = await bot.fetch_channel(staff_channel_id)
@@ -116,14 +129,20 @@ async def flight_create(interaction: discord.Interaction, start_date: str, start
 # Flight host announcement
 @tree.command(name="flight_host", description="Send flight announcement", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
-    route="Flight route (e.g. LHR to JFK)",
     aircraft="Aircraft type (e.g. B737-800)",
-    flight_code="Flight code (e.g. LS8800)"
+    route="Select a route"
 )
+@app_commands.choices(route=[
+    app_commands.Choice(name=f"{r['code']} {r['text']}", value=f"{r['code']}|{r['text']}") for r in ROUTES
+])
 @is_scheduler()
-async def flight_host(interaction: discord.Interaction, route: str, aircraft: str, flight_code: str):
+async def flight_host(interaction: discord.Interaction, aircraft: str, route: app_commands.Choice[str]):
     await interaction.response.defer(ephemeral=False)
     guild = interaction.guild
+
+    # Extract flight_code and route_text
+    flight_code, route_text = route.value.split("|", 1)
+
     events = await guild.fetch_scheduled_events()
     matching = [e for e in events if flight_code in e.name]
 
@@ -133,10 +152,13 @@ async def flight_host(interaction: discord.Interaction, route: str, aircraft: st
 
     event = matching[0]
 
+    # Game link pulled from env var e.g. FR4813_GAME_LINK
+    game_link = os.getenv(f"{flight_code}_GAME_LINK", "https://www.roblox.com")
+
     embed = discord.Embed(
         title=f"Flight Announcement: {flight_code}",
         description=(
-            f"✈️ **Route:** {route}\n"
+            f"✈️ **Route:** {route_text}\n"
             f"🛩️ **Aircraft:** {aircraft}\n"
             f"👨‍✈️ **Host:** {interaction.user.mention}\n\n"
             "📢 Please check in, complete bag drop, and proceed through security.\n"
@@ -145,7 +167,7 @@ async def flight_host(interaction: discord.Interaction, route: str, aircraft: st
         color=JET2_DARK_RED,
         timestamp=datetime.utcnow()
     )
-    embed.add_field(name="🕹️ Game", value="[Game Link](https://www.roblox.com/games/117460430857307/Jet2-rbx-Paphos-International-Airport)", inline=False)
+    embed.add_field(name="🕹️ Game", value=f"[Game Link]({game_link})", inline=False)
     embed.add_field(name="📅 Event", value=f"[Click to View Event]({event.url})", inline=False)
     embed.set_footer(text="Flight Announcements")
     if BANNER_URL:
