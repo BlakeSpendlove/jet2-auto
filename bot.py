@@ -18,6 +18,7 @@ BANNER_URL = os.getenv("BANNER_URL")
 STAFF_FLIGHT_ID = os.getenv("STAFF_FLIGHT_ID")
 FR4813_GAME_LINK = os.getenv("FR4813_GAME_LINK")
 FR5519_GAME_LINK = os.getenv("FR5519_GAME_LINK")
+FR4927_GAME_LINK = os.getenv("FR4927_GAME_LINK")
 
 # Bot setup
 intents = discord.Intents.default()
@@ -37,6 +38,11 @@ ROUTES = [
         "code": "FR5519",
         "text": "Krakow Airport → Bristol Airport",
         "env": "FR5519_GAME_LINK"
+    },
+        {
+        "code": "FR4927",
+        "text": "Manchester Airport → Pafos International Airport",
+        "env": "FR4927_GAME_LINK"
     }
 ]
 
