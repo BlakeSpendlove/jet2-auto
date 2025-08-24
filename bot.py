@@ -22,7 +22,7 @@ intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
-JET2_DARK_RED = discord.Color.from_str("#193E75")
+JET2_DARK_RED = discord.Color.from_str("#193e75")
 
 # Permissions check
 def is_scheduler():
@@ -158,7 +158,7 @@ async def flight_host(interaction: discord.Interaction, route: str, aircraft: st
         color=JET2_DARK_RED,
         timestamp=datetime.utcnow()
     )
-    embed.add_field(name="🕹️ Game", value="[Join Jet2 Manchester Airport](https://www.roblox.com/games/117460430857307/Jet2-rbx-Paphos-International-Airport)", inline=False)
+    embed.add_field(name="🕹️ Game", value="[Game Link](https://www.roblox.com/games/117460430857307/Jet2-rbx-Paphos-International-Airport)", inline=False)
     embed.add_field(name="📅 Event", value=f"[Click to View Event]({event.url})", inline=False)
     embed.set_footer(text="Flight Announcements")
     if BANNER_URL:
