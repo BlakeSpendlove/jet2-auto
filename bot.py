@@ -17,6 +17,7 @@ AFFILIATE_CHANNEL_ID = int(os.getenv("AFFILIATE_CHANNEL_ID"))
 BANNER_URL = os.getenv("BANNER_URL")
 STAFF_FLIGHT_ID = os.getenv("STAFF_FLIGHT_ID")
 FR4813_GAME_LINK = os.getenv("FR4813_GAME_LINK")
+FR5519_GAME_LINK = os.getenv("FR5519_GAME_LINK")
 
 # Bot setup
 intents = discord.Intents.default()
@@ -26,13 +27,15 @@ tree = bot.tree
 JET2_DARK_RED = discord.Color.from_str("#193e75")
 
 # Define available routes in one place
-ROUTES = [
+ROUTES = [ 
     {
         "code": "FR4813",
         "text": "Pafos International Airport → Bristol Airport",
         "env": "FR4813_GAME_LINK"
     }
-    # Add more routes here later
+        "code": "FR5519",
+        "text": "Krakow Airport → Bristol Airport",
+        "env": "FR45519_GAME_LINK"
 ]
 
 # Permissions check
