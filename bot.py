@@ -32,10 +32,11 @@ ROUTES = [
         "code": "FR4813",
         "text": "Pafos International Airport → Bristol Airport",
         "env": "FR4813_GAME_LINK"
-    }
+    },
+    {
         "code": "FR5519",
         "text": "Krakow Airport → Bristol Airport",
-        "env": "FR45519_GAME_LINK"
+        "env": "FR5519_GAME_LINK"
     }
 ]
 
