@@ -16,7 +16,7 @@ SCHEDULE_ROLE_ID = int(os.getenv("SCHEDULE_ROLE_ID"))
 AFFILIATE_CHANNEL_ID = int(os.getenv("AFFILIATE_CHANNEL_ID"))
 BANNER_URL = os.getenv("BANNER_URL")
 STAFF_FLIGHT_ID = os.getenv("STAFF_FLIGHT_ID")
-FR4813_GAME_LINK = os.getenv("FR4813_GAME_LINK")
+FR3161_GAME_LINK = os.getenv("FR3161_GAME_LINK")
 FR5519_GAME_LINK = os.getenv("FR5519_GAME_LINK")
 FR4927_GAME_LINK = os.getenv("FR4927_GAME_LINK")
 
@@ -30,9 +30,9 @@ JET2_DARK_RED = discord.Color.from_str("#193e75")
 # Define available routes in one place
 ROUTES = [ 
     {
-        "code": "FR4813",
+        "code": "FR3161",
         "text": "Pafos International Airport → Bristol Airport",
-        "env": "FR4813_GAME_LINK"
+        "env": "FR3161_GAME_LINK"
     },
     {
         "code": "FR5519",
