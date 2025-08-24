@@ -16,7 +16,7 @@ SCHEDULE_ROLE_ID = int(os.getenv("SCHEDULE_ROLE_ID"))
 AFFILIATE_CHANNEL_ID = int(os.getenv("AFFILIATE_CHANNEL_ID"))
 BANNER_URL = os.getenv("BANNER_URL")
 STAFF_FLIGHT_ID = os.getenv("STAFF_FLIGHT_ID")
-FR4813_GAME_LINK = "https://www.roblox.com/games/117460430857307/Ryanair-RBX-Paphos-International-Airport"
+FR4813_GAME_LINK = os.getenv("FR4813_GAME_LINK")
 
 # Bot setup
 intents = discord.Intents.default()
