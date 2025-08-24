@@ -44,15 +44,17 @@ async def ping(interaction: discord.Interaction):
 # Create a flight event
 @tree.command(name="flight_create", description="Create a flight event", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
-    route="Flight route (e.g. LHR to JFK)",
     start_date="Start date in DD/MM/YYYY",
     start_time="Start time in 24h format HH:MM",
-    aircraft="Aircraft type (e.g. B737-800)",
-    flight_code="Flight code (e.g. LS8800)"
+    aircraft="Aircraft type (e.g. B737-800)"
 )
 @is_scheduler()
-async def flight_create(interaction: discord.Interaction, route: str, start_date: str, start_time: str, aircraft: str, flight_code: str):
+async def flight_create(interaction: discord.Interaction, start_date: str, start_time: str, aircraft: str):
     try:
+        # Fixed route and flight code
+        route = "Pafos International Airport → Bristol Airport"
+        flight_code = "FR4813"
+
         # Convert to timezone-aware datetime in UTC
         start_dt_naive = datetime.strptime(f"{start_date} {start_time}", "%d/%m/%Y %H:%M")
         start_dt = start_dt_naive.replace(tzinfo=utcnow().tzinfo)
@@ -60,7 +62,7 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
 
         guild = interaction.guild
 
-        # First create the scheduled event
+        # Create the scheduled event
         event = await guild.create_scheduled_event(
             name=f"Flight {flight_code} - {route}",
             start_time=start_dt,
@@ -76,7 +78,7 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
             location="Online / Virtual"
         )
 
-        # Now send staff ping to the STAFF_FLIGHT_ID channel
+        # Send staff ping to STAFF_FLIGHT_ID channel
         try:
             staff_channel_id = int(STAFF_FLIGHT_ID)
             staff_channel = await bot.fetch_channel(staff_channel_id)
@@ -104,25 +106,9 @@ async def flight_create(interaction: discord.Interaction, route: str, start_date
 
         notify_host.start()
 
-        await interaction.response.send_message(f"✅ Flight event created: {event.name} at {start_dt.strftime('%d/%m/%Y %H:%M')}")
-    except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
-
-        # Notify host 20 minutes before
-        notify_time = start_dt - timedelta(minutes=20)
-
-        @tasks.loop(seconds=30)
-        async def notify_host():
-            if datetime.now(tz=start_dt.tzinfo) >= notify_time:
-                try:
-                    await interaction.user.send(f"Reminder: Your flight '{flight_code}' starts at {start_dt.strftime('%H:%M')}! Prepare the airport.")
-                except:
-                    print("Could not DM host.")
-                notify_host.stop()
-
-        notify_host.start()
-
-        await interaction.response.send_message(f"✅ Flight event created: {event.name} at {start_dt.strftime('%d/%m/%Y %H:%M')}")
+        await interaction.response.send_message(
+            f"✅ Flight event created: {event.name} at {start_dt.strftime('%d/%m/%Y %H:%M')}"
+        )
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
