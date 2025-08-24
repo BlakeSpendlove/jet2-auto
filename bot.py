@@ -36,6 +36,7 @@ ROUTES = [
         "code": "FR5519",
         "text": "Krakow Airport → Bristol Airport",
         "env": "FR45519_GAME_LINK"
+    }
 ]
 
 # Permissions check
