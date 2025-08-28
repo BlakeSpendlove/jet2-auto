@@ -77,63 +77,75 @@ async def ping(interaction: discord.Interaction):
 @is_scheduler()
 async def flight_create(interaction: discord.Interaction, start_date: str, start_time: str, aircraft: str, route: app_commands.Choice[str]):
     try:
-        # Extract flight_code and route_text from choice
+        # Extract flight_code and route_text
         flight_code, route_text = route.value.split("|", 1)
-
-        # Convert to timezone-aware datetime in UTC
         start_dt_naive = datetime.strptime(f"{start_date} {start_time}", "%d/%m/%Y %H:%M")
         start_dt = start_dt_naive.replace(tzinfo=utcnow().tzinfo)
         end_dt = start_dt + timedelta(hours=1)
 
-        guild = interaction.guild
+        # Step 1: Preview Embed
+        embed = discord.Embed(title="✈️ Flight Event Confirmation", color=discord.Color.blue())
+        embed.add_field(name="Flight Code", value=flight_code, inline=True)
+        embed.add_field(name="Route", value=route_text, inline=True)
+        embed.add_field(name="Aircraft", value=aircraft, inline=True)
+        embed.add_field(name="Date & Time", value=start_dt.strftime("%d/%m/%Y %H:%M"), inline=False)
+        embed.add_field(name="Host", value=interaction.user.mention, inline=False)
+        embed.set_footer(text="Confirm to create this flight event.")
 
-        # Create the scheduled event
-        event = await guild.create_scheduled_event(
-            name=f"Flight {flight_code} - {route_text}",
-            start_time=start_dt,
-            end_time=end_dt,
-            description=(
-                f"Aircraft: {aircraft}\n"
-                f"Route: {route_text}\n"
-                f"Flight code: {flight_code}\n"
-                f"Host: {interaction.user.mention}"
-            ),
-            privacy_level=discord.PrivacyLevel.guild_only,
-            entity_type=discord.EntityType.external,
-            location="Online / Virtual"
-        )
-
-        # Send staff ping
-        try:
-            staff_channel_id = int(STAFF_FLIGHT_ID)
-            staff_channel = await bot.fetch_channel(staff_channel_id)
-            staff_msg = await staff_channel.send(
-                content=f"**FLIGHT {flight_code}**\n@everyone\n\n{event.url}\n\n**Please confirm your attendance below.**",
-                allowed_mentions=discord.AllowedMentions(everyone=True)
+        async def confirm_event(inter: discord.Interaction):
+            guild = inter.guild
+            event = await guild.create_scheduled_event(
+                name=f"Flight {flight_code} - {route_text}",
+                start_time=start_dt,
+                end_time=end_dt,
+                description=(
+                    f"Aircraft: {aircraft}\n"
+                    f"Route: {route_text}\n"
+                    f"Flight code: {flight_code}\n"
+                    f"Host: {interaction.user.mention}"
+                ),
+                privacy_level=discord.PrivacyLevel.guild_only,
+                entity_type=discord.EntityType.external,
+                location="Online / Virtual"
             )
-            await staff_msg.add_reaction("🟩")
-            await staff_msg.add_reaction("🟨")
-            await staff_msg.add_reaction("🟥")
-        except Exception as e:
-            print(f"[ERROR] Could not send staff confirmation message: {e}")
 
-        # Schedule host notification
-        notify_time = start_dt - timedelta(minutes=20)
-
-        @tasks.loop(seconds=30)
-        async def notify_host():
-            if datetime.now(tz=start_dt.tzinfo) >= notify_time:
+            # Step 2: Ask if staff announcement should be sent
+            async def send_staff_announcement(inter2: discord.Interaction):
                 try:
-                    await interaction.user.send(f"Reminder: Your flight '{flight_code}' starts at {start_dt.strftime('%H:%M')}! Prepare the airport.")
-                except:
-                    print("Could not DM host.")
-                notify_host.stop()
+                    staff_channel_id = int(STAFF_FLIGHT_ID)
+                    staff_channel = await bot.fetch_channel(staff_channel_id)
+                    staff_msg = await staff_channel.send(
+                        content=f"**FLIGHT {flight_code}**\n@everyone\n\n{event.url}\n\n**Please confirm your attendance below.**",
+                        allowed_mentions=discord.AllowedMentions(everyone=True)
+                    )
+                    await staff_msg.add_reaction("🟩")
+                    await staff_msg.add_reaction("🟨")
+                    await staff_msg.add_reaction("🟥")
+                    await inter2.response.send_message("📢 Staff announcement sent.", ephemeral=True)
+                except Exception as e:
+                    await inter2.response.send_message(f"⚠️ Could not send staff announcement: {e}", ephemeral=True)
 
-        notify_host.start()
+            embed2 = discord.Embed(title="📢 Send Staff Announcement?", description="Would you like to send the staff announcement for this flight?", color=discord.Color.orange())
+            view2 = ConfirmView(on_confirm=send_staff_announcement)
+            await inter.response.send_message(embed=embed2, view=view2, ephemeral=True)
 
-        await interaction.response.send_message(
-            f"✅ Flight event created: {event.name} at {start_dt.strftime('%d/%m/%Y %H:%M')}"
-        )
+            # Reminder task
+            notify_time = start_dt - timedelta(minutes=20)
+            @tasks.loop(seconds=30)
+            async def notify_host():
+                if datetime.now(tz=start_dt.tzinfo) >= notify_time:
+                    try:
+                        await interaction.user.send(f"Reminder: Your flight '{flight_code}' starts at {start_dt.strftime('%H:%M')}! Prepare the airport.")
+                    except:
+                        print("Could not DM host.")
+                    notify_host.stop()
+            notify_host.start()
+
+            await interaction.followup.send(f"✅ Flight event created: {event.name} at {start_dt.strftime('%d/%m/%Y %H:%M')}", ephemeral=True)
+
+        view = ConfirmView(on_confirm=confirm_event)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
