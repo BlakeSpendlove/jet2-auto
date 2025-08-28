@@ -154,8 +154,6 @@ async def flight_create(interaction: discord.Interaction, start_date: str, start
 except Exception as e:
     print(f"Could not DM host: {e}")
 
-
-
 # Flight host announcement
 @tree.command(name="flight_host", description="Send flight announcement", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
