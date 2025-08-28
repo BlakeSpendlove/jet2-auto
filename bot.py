@@ -4,6 +4,7 @@ from discord.ext import commands, tasks
 from discord import app_commands
 from datetime import datetime, timedelta
 from discord.utils import utcnow
+from discord import ui, Interaction, ButtonStyle
 import json
 
 # Load environment variables
@@ -64,6 +65,26 @@ async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("Pong!")
 
 # Create a flight event
+class ConfirmView(ui.View):
+    def __init__(self, on_confirm, on_cancel=None, timeout=60):
+        super().__init__(timeout=timeout)
+        self.on_confirm = on_confirm
+        self.on_cancel = on_cancel
+
+    @ui.button(label="✅ Confirm", style=ButtonStyle.green)
+    async def confirm(self, interaction: Interaction, button: ui.Button):
+        await interaction.response.defer()
+        await self.on_confirm(interaction)
+        self.stop()
+
+    @ui.button(label="❌ Cancel", style=ButtonStyle.red)
+    async def cancel(self, interaction: Interaction, button: ui.Button):
+        if self.on_cancel:
+            await self.on_cancel(interaction)
+        else:
+            await interaction.response.send_message("❌ Cancelled.", ephemeral=True)
+        self.stop()
+        
 @tree.command(name="flight_create", description="Create a flight event", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
     start_date="Start date in DD/MM/YYYY",
