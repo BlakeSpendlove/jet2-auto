@@ -150,9 +150,11 @@ async def flight_create(interaction: discord.Interaction, start_date: str, start
             async def notify_host():
                 if datetime.now(tz=start_dt.tzinfo) >= notify_time:
                     try:
-                        await member.send(f"Reminder: Your flight '{flight_code}' starts at {start_dt.strftime('%H:%M')}! Ensure you now run the /flight_briefing command and start briefing. Failure to do so will result in a infraction.")
-                    except:
-                        print(
+    await member.send(f"Reminder: Your flight '{flight_code}' starts at {start_dt.strftime('%H:%M')}! Ensure you now run the /flight_briefing command and start briefing. Failure to do so will result in a infraction.")
+except Exception as e:
+    print(f"Could not DM host: {e}")
+
+
 
 # Flight host announcement
 @tree.command(name="flight_host", description="Send flight announcement", guild=discord.Object(id=GUILD_ID))
