@@ -64,7 +64,7 @@ async def on_ready():
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("Pong!")
 
-# Create a flight event
+# ConfirmView for buttons
 class ConfirmView(ui.View):
     def __init__(self, on_confirm, on_cancel=None, timeout=60):
         super().__init__(timeout=timeout)
@@ -85,6 +85,7 @@ class ConfirmView(ui.View):
             await interaction.response.send_message("❌ Cancelled.", ephemeral=True)
         self.stop()
         
+# Create a flight event
 @tree.command(name="flight_create", description="Create a flight event", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
     start_date="Start date in DD/MM/YYYY",
@@ -150,9 +151,39 @@ async def flight_create(interaction: discord.Interaction, start_date: str, start
             async def notify_host():
                 if datetime.now(tz=start_dt.tzinfo) >= notify_time:
                     try:
-    await member.send(f"Reminder: Your flight '{flight_code}' starts at {start_dt.strftime('%H:%M')}! Ensure you now run the /flight_briefing command and start briefing. Failure to do so will result in a infraction.")
-except Exception as e:
-    print(f"Could not DM host: {e}")
+                        await member.send(f"Reminder: Your flight '{flight_code}' starts at {start_dt.strftime('%H:%M')}! Ensure you now run the /flight_briefing command and start briefing. Failure to do so will result in an infraction.")
+                    except:
+                        pass
+                    notify_host.stop()
+            notify_host.start()
+
+        async def send_staff_announcement(inter_staff: Interaction, event, dm_message):
+            try:
+                staff_channel = await bot.fetch_channel(int(STAFF_FLIGHT_ID))
+                staff_msg = await staff_channel.send(
+                    content=f"**FLIGHT {flight_code}**\n@everyone\n\n{event.url}\n\n**Please confirm your attendance below.**",
+                    allowed_mentions=discord.AllowedMentions(everyone=True)
+                )
+                await staff_msg.add_reaction("🟩")
+                await staff_msg.add_reaction("🟨")
+                await staff_msg.add_reaction("🟥")
+                # Edit DM embed to final confirmation
+                embed3 = discord.Embed(
+                    title="✅ Flight Created & Staff Announcement Sent!",
+                    description=f"Flight {flight_code} has been created and the staff announcement has been sent.",
+                    color=discord.Color.green()
+                )
+                await dm_message.edit(embed=embed3, view=None)
+                await inter_staff.response.send_message("📢 Staff announcement sent.", ephemeral=True)
+            except Exception as e:
+                await inter_staff.response.send_message(f"⚠️ Could not send staff announcement: {e}", ephemeral=True)
+
+        view = ConfirmView(on_confirm=create_event)
+        await member.send(embed=embed, view=view)
+        await interaction.response.send_message("✅ Flight preview sent to your DMs.", ephemeral=True)
+
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
 # Flight host announcement
 @tree.command(name="flight_host", description="Send flight announcement", guild=discord.Object(id=GUILD_ID))
