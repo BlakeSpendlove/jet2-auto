@@ -22,12 +22,13 @@ FR5519_GAME_LINK = os.getenv("FR5519_GAME_LINK")
 FR4927_GAME_LINK = os.getenv("FR4927_GAME_LINK")
 
 intents = discord.Intents.default()
-intents.presences = True
+intents.presences = True   # required for Watching/Playing/Listening
 intents.guilds = True
 intents.members = True
 
-bot = commands.Bot(command_prefix='/', intents=intents)  # ✅ create bot first
-tree = bot.tree  # ✅ now this works
+# Create bot first
+bot = commands.Bot(command_prefix='/', intents=intents)
+tree = bot.tree  # access command tree
 
 JET2_DARK_RED = discord.Color.from_str("#193e75")
 
@@ -54,12 +55,12 @@ ROUTES = [
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-    # Set status
+    # Set persistent status
     activity = discord.Activity(type=discord.ActivityType.watching, name="RYR Dispatchers")
     await bot.change_presence(activity=activity)
     print("Status set to 'Watching RYR Dispatchers'")
 
-    # Sync commands
+    # Sync slash commands
     await tree.sync(guild=discord.Object(id=GUILD_ID))
     print("Commands synced")
 
