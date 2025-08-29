@@ -25,9 +25,9 @@ intents = discord.Intents.default()
 intents.presences = True
 intents.guilds = True
 intents.members = True
-tree = bot.tree
 
-bot = commands.Bot(command_prefix='/', intents=intents)  # Use your preferred prefix here
+bot = commands.Bot(command_prefix='/', intents=intents)  # ✅ create bot first
+tree = bot.tree  # ✅ now this works
 
 JET2_DARK_RED = discord.Color.from_str("#193e75")
 
