@@ -54,15 +54,14 @@ ROUTES = [
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-    activity = discord.Activity(
-        type=discord.ActivityType.watching,
-        name="RYR Infractions"
-    )
+    # Set status
+    activity = discord.Activity(type=discord.ActivityType.watching, name="RYR Dispatchers")
     await bot.change_presence(activity=activity)
-    print("Status set to 'Watching Flight Creations'")
+    print("Status set to 'Watching RYR Dispatchers'")
 
     # Sync commands
-    await bot.tree.sync(guild=guild)
+    await tree.sync(guild=discord.Object(id=GUILD_ID))
+    print("Commands synced")
 
 # Permissions check
 def is_scheduler():
