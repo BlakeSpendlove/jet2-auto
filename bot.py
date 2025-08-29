@@ -47,6 +47,20 @@ ROUTES = [
     }
 ]
 
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+
+    activity = discord.Activity(
+        type=discord.ActivityType.watching,
+        name="RYR Infractions"
+    )
+    await bot.change_presence(activity=activity)
+    print("Status set to 'Watching Flight Creations'")
+
+    # Sync commands
+    await bot.tree.sync(guild=guild)
+
 # Permissions check
 def is_scheduler():
     async def predicate(interaction: discord.Interaction):
