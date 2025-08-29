@@ -21,10 +21,12 @@ FR3161_GAME_LINK = os.getenv("FR3161_GAME_LINK")
 FR5519_GAME_LINK = os.getenv("FR5519_GAME_LINK")
 FR4927_GAME_LINK = os.getenv("FR4927_GAME_LINK")
 
-# Bot setup
 intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="!", intents=intents)
-tree = bot.tree
+intents.presences = True
+intents.guilds = True
+intents.members = True
+
+bot = commands.Bot(command_prefix='/', intents=intents)  # Use your preferred prefix here
 
 JET2_DARK_RED = discord.Color.from_str("#193e75")
 
