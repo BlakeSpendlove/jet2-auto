@@ -25,6 +25,7 @@ intents = discord.Intents.default()
 intents.presences = True
 intents.guilds = True
 intents.members = True
+tree = bot.tree
 
 bot = commands.Bot(command_prefix='/', intents=intents)  # Use your preferred prefix here
 
