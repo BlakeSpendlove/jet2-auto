@@ -123,7 +123,7 @@ async def flight_create(
     interaction: discord.Interaction,
     start_date: str,
     start_time: str,
-    aircraft: app_commands.Choice[str],  # <- changed to Choice[str]
+    aircraft: app_commands.Choice[str],
     route: app_commands.Choice[str]
 ):
     try:
@@ -142,12 +142,18 @@ async def flight_create(
         embed = discord.Embed(title="✈️ Flight Event Confirmation", color=discord.Color.blue())
         embed.add_field(name="Flight Code", value=flight_code, inline=True)
         embed.add_field(name="Route", value=route_text, inline=True)
-        embed.add_field(name="Aircraft", value=aircraft.value, inline=True)  # use aircraft.value
+        embed.add_field(name="Aircraft", value=aircraft.value, inline=True)  # ✅ use .value
         embed.add_field(name="Date & Time", value=start_dt.strftime("%d/%m/%Y %H:%M"), inline=False)
         embed.add_field(name="Host", value=member.mention, inline=False)
         embed.set_footer(text="Press Confirm to create this flight event.")
 
-        # (rest of your create_event + DM confirmation code stays the same…)
+        # Description for the scheduled event
+        event_description = (
+            f"Aircraft: {aircraft.value}\n"
+            f"Route: {route_text}\n"
+            f"Flight Code: {flight_code}\n"
+            f"Host: {member.mention}"
+        )
 
         async def create_event(inter_confirm: Interaction):
             guild = interaction.guild
@@ -155,18 +161,12 @@ async def flight_create(
                 name=f"Flight {flight_code} - {route_text}",
                 start_time=start_dt,
                 end_time=end_dt,
-                description=(
-                    f"Aircraft: {aircraft}\n"
-                    f"Route: {route_text}\n"
-                    f"Flight Code: {flight_code}\n"
-                    f"Host: {member.mention}"
-                ),
+                description=event_description,
                 privacy_level=discord.PrivacyLevel.guild_only,
                 entity_type=discord.EntityType.external,
                 location="Online / Virtual"
             )
 
-            # Edit DM embed for staff announcement step
             embed2 = discord.Embed(
                 title="✅ Flight Created!",
                 description="Flight created successfully.\n\nWould you like to send the Staff Announcement?",
@@ -175,7 +175,6 @@ async def flight_create(
             view2 = ConfirmView(on_confirm=lambda i: send_staff_announcement(i, event, inter_confirm.message))
             await inter_confirm.message.edit(embed=embed2, view=view2)
 
-            # Reminder task
             notify_time = start_dt - timedelta(minutes=20)
             @tasks.loop(seconds=30)
             async def notify_host():
@@ -197,7 +196,7 @@ async def flight_create(
                 await staff_msg.add_reaction("🟩")
                 await staff_msg.add_reaction("🟨")
                 await staff_msg.add_reaction("🟥")
-                # Edit DM embed to final confirmation
+
                 embed3 = discord.Embed(
                     title="✅ Flight Created & Staff Announcement Sent!",
                     description=f"Flight {flight_code} has been created and the staff announcement has been sent.",
@@ -215,6 +214,7 @@ async def flight_create(
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
+# /flight_host command
 @tree.command(name="flight_host", description="Send flight announcement", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
     aircraft="Choose an aircraft type",
@@ -232,7 +232,7 @@ async def flight_create(
 @is_scheduler()
 async def flight_host(
     interaction: discord.Interaction,
-    aircraft: app_commands.Choice[str],  # <- changed to Choice[str]
+    aircraft: app_commands.Choice[str],
     route: app_commands.Choice[str]
 ):
     await interaction.response.defer(ephemeral=False)
@@ -254,7 +254,7 @@ async def flight_host(
         title=f"Flight Announcement: {flight_code}",
         description=(
             f"✈️ **Route:** {route_text}\n"
-            f"🛩️ **Aircraft:** {aircraft.value}\n"  # use aircraft.value
+            f"🛩️ **Aircraft:** {aircraft.value}\n"  # ✅ use .value here
             f"👨‍✈️ **Host:** {interaction.user.mention}\n\n"
             "📢 Please check in, complete bag drop, and proceed through security.\n"
             "🎮 Join the airport below."
