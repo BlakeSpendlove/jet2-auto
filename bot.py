@@ -81,7 +81,7 @@ async def on_ready():
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("Pong!")
 
-# ConfirmView for buttons
+# ConfirmView for buttons /flight_create cmd
 class ConfirmView(ui.View):
     def __init__(self, on_confirm, on_cancel=None, timeout=60):
         super().__init__(timeout=timeout)
@@ -101,20 +101,31 @@ class ConfirmView(ui.View):
         else:
             await interaction.response.send_message("❌ Cancelled.", ephemeral=True)
         self.stop()
-        
-# Create a flight event
+
 @tree.command(name="flight_create", description="Create a flight event", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
     start_date="Start date in DD/MM/YYYY",
     start_time="Start time in 24h format HH:MM",
-    aircraft="Aircraft type (e.g. B737-800)",
+    aircraft="Choose an aircraft type",
     route="Select a route"
 )
-@app_commands.choices(route=[
-    app_commands.Choice(name=f"{r['code']} {r['text']}", value=f"{r['code']}|{r['text']}") for r in ROUTES
-])
+@app_commands.choices(
+    aircraft=[
+        app_commands.Choice(name="B738", value="B738"),
+        app_commands.Choice(name="A320-200", value="A320-200")
+    ],
+    route=[
+        app_commands.Choice(name=f"{r['code']} {r['text']}", value=f"{r['code']}|{r['text']}") for r in ROUTES
+    ]
+)
 @is_scheduler()
-async def flight_create(interaction: discord.Interaction, start_date: str, start_time: str, aircraft: str, route: app_commands.Choice[str]):
+async def flight_create(
+    interaction: discord.Interaction,
+    start_date: str,
+    start_time: str,
+    aircraft: app_commands.Choice[str],  # <- changed to Choice[str]
+    route: app_commands.Choice[str]
+):
     try:
         flight_code, route_text = route.value.split("|", 1)
         start_dt_naive = datetime.strptime(f"{start_date} {start_time}", "%d/%m/%Y %H:%M")
@@ -131,10 +142,12 @@ async def flight_create(interaction: discord.Interaction, start_date: str, start
         embed = discord.Embed(title="✈️ Flight Event Confirmation", color=discord.Color.blue())
         embed.add_field(name="Flight Code", value=flight_code, inline=True)
         embed.add_field(name="Route", value=route_text, inline=True)
-        embed.add_field(name="Aircraft", value=aircraft, inline=True)
+        embed.add_field(name="Aircraft", value=aircraft.value, inline=True)  # use aircraft.value
         embed.add_field(name="Date & Time", value=start_dt.strftime("%d/%m/%Y %H:%M"), inline=False)
         embed.add_field(name="Host", value=member.mention, inline=False)
         embed.set_footer(text="Press Confirm to create this flight event.")
+
+        # (rest of your create_event + DM confirmation code stays the same…)
 
         async def create_event(inter_confirm: Interaction):
             guild = interaction.guild
@@ -202,21 +215,29 @@ async def flight_create(interaction: discord.Interaction, start_date: str, start
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
-# Flight host announcement
 @tree.command(name="flight_host", description="Send flight announcement", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
-    aircraft="Aircraft type (e.g. B737-800)",
+    aircraft="Choose an aircraft type",
     route="Select a route"
 )
-@app_commands.choices(route=[
-    app_commands.Choice(name=f"{r['code']} {r['text']}", value=f"{r['code']}|{r['text']}") for r in ROUTES
-])
+@app_commands.choices(
+    aircraft=[
+        app_commands.Choice(name="B738", value="B738"),
+        app_commands.Choice(name="A320-200", value="A320-200")
+    ],
+    route=[
+        app_commands.Choice(name=f"{r['code']} {r['text']}", value=f"{r['code']}|{r['text']}") for r in ROUTES
+    ]
+)
 @is_scheduler()
-async def flight_host(interaction: discord.Interaction, aircraft: str, route: app_commands.Choice[str]):
+async def flight_host(
+    interaction: discord.Interaction,
+    aircraft: app_commands.Choice[str],  # <- changed to Choice[str]
+    route: app_commands.Choice[str]
+):
     await interaction.response.defer(ephemeral=False)
     guild = interaction.guild
 
-    # Extract flight_code and route_text
     flight_code, route_text = route.value.split("|", 1)
 
     events = await guild.fetch_scheduled_events()
@@ -227,15 +248,13 @@ async def flight_host(interaction: discord.Interaction, aircraft: str, route: ap
         return
 
     event = matching[0]
-
-    # Game link pulled from env var e.g. FR4813_GAME_LINK
     game_link = os.getenv(f"{flight_code}_GAME_LINK", "https://www.roblox.com")
 
     embed = discord.Embed(
         title=f"Flight Announcement: {flight_code}",
         description=(
             f"✈️ **Route:** {route_text}\n"
-            f"🛩️ **Aircraft:** {aircraft}\n"
+            f"🛩️ **Aircraft:** {aircraft.value}\n"  # use aircraft.value
             f"👨‍✈️ **Host:** {interaction.user.mention}\n\n"
             "📢 Please check in, complete bag drop, and proceed through security.\n"
             "🎮 Join the airport below."
